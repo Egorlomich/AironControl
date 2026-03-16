@@ -35,7 +35,7 @@ namespace AironControl
             user = "me"; 
             password = "10518psw";
             deviceName = "raspberry pi";
-
+       
         }
         public string settingsName { get; set; }
         public string host { get; set; }

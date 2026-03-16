@@ -1,5 +1,6 @@
-using Microsoft.Extensions.Logging;
+п»їusing Microsoft.Extensions.Logging;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Graphics;
 using SkiaSharp;
 using SkiaSharp.Views.Maui.Controls.Hosting;
@@ -19,25 +20,34 @@ namespace AironControl
         private const double MIN_SCREEN_WIDTH = 320;
         private const double MAX_SCREEN_WIDTH = 2000;
         private const double MIN_SCREEN_HEIGHT = 480;
-
+        private const double STUCK_TIMEOUT_MS = 180; 
+        private const int MIN_SEND_INTERVAL_MS = 60; 
+        private const int INTERACTION_TIMEOUT_MS = 400;
         private PointF _center;
-        private bool _isPressed = false, _isSending = false;
-        private PointF _knobPosition;
+        private PointF _knobPosition; 
+        private PointF _startKnobPosition;
         private const float BaseRadius = 100f;
         private const float KnobRadius = 40f;
-        private Connection _connection;
+        private SshConnection _connection;
         private double _currentX = 0, _currentY = 0;
-
-
+        private DateTime _lastSentTime = DateTime.MinValue;
         private bool _leftActive = false;
         private bool _rightActive = false;
 
         private SKBitmap _videoFrame;
         private UdpClient _udpClient;
-        private bool _receiving = true;
+        private bool _receiving = true; 
+        private bool _forceZeroSend = false;
 
+        private DateTime _lastInputTime = DateTime.MinValue; 
+        private const int AUTO_RESET_MS = 350;
 
-        private const double DEFAULT_ASPECT_RATIO = 16.0 / 9.0; // Значение по умолчанию
+        private bool _isActive;
+
+        private DateTime _lastInvalidate = DateTime.MinValue;
+        private const int INVALIDATE_THROTTLE_MS = 33;
+
+        private const double DEFAULT_ASPECT_RATIO = 16.0 / 9.0; // Р—РЅР°С‡РµРЅРёРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
 
         private SemaphoreSlim _sendSemaphore = new SemaphoreSlim(1, 1);
         private (double x, double y, int rotate) _lastSentData;
@@ -49,24 +59,51 @@ namespace AironControl
         {
             InitializeComponent();
             SetupJoystick();
-            _connection = new Connection(); 
+            _connection = new SshConnection(); 
 
             InitializePaints(); 
             _center = new PointF(125, 125);
 
             SetupButtonEvents();
             MainGrid.SizeChanged += OnMainGridSizeChanged;
+
+        }
+
+        private async void HeartbeatTimer_Tick(object sender, EventArgs e)
+        {
+            var now = DateTime.Now;
+
+            if ((now - _lastSentTime).TotalMilliseconds < 60) return;
+
+            // _isActive СЃС‚Р°РІРёС‚СЃСЏ РІ true РІ Started/Running, РІ false РІ Completed/Canceled
+            // РђРІР°СЂРёР№РЅС‹Р№ СЃР±СЂРѕСЃ: РµСЃР»Рё _isActive Р·Р°РІРёСЃ (gesture РїРѕС‚РµСЂСЏР»СЃСЏ Р±РµР· Completed СЃРѕР±С‹С‚РёСЏ)
+            if (_isActive && (now - _lastInputTime).TotalMilliseconds > 2000)
+            {
+                _isActive = false;
+                _currentX = _currentY = 0;
+                _knobPosition = _center;
+                JoystickGraphics.Invalidate();
+                Debug.WriteLine("[HB] РђРІР°СЂРёР№РЅС‹Р№ СЃР±СЂРѕСЃ вЂ” gesture РїРѕС‚РµСЂСЏРЅ");
+            }
+
+            double sendX = _isActive ? _currentX : 0;
+            double sendY = _isActive ? _currentY : 0;
+            int rotate = GetCurrentRotate();
+
+            await SendDataBackgroundAsync(sendX, sendY, rotate);
+            _lastSentTime = now;
         }
         private void SetupButtonEvents()
         {
-            // ЛЕВАЯ кнопка - включение при нажатии, выключение при отпускании
-            LeftButton.Pressed += async (s, e) =>
+            // Р›Р•Р’РђРЇ РєРЅРѕРїРєР° - РІРєР»СЋС‡РµРЅРёРµ РїСЂРё РЅР°Р¶Р°С‚РёРё, РІС‹РєР»СЋС‡РµРЅРёРµ РїСЂРё РѕС‚РїСѓСЃРєР°РЅРёРё
+            LeftButton.Pressed += (s, e) =>
             {
                 Debug.WriteLine("LEFT PRESSED");
+                _lastInputTime = DateTime.Now;
                 _leftActive = true;
-                _rightActive = false; // Выключаем правую кнопку
+                _rightActive = false;
                 UpdateButtonColors();
-                await SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+                _ = SendDataBackgroundAsync(_currentX, _currentY, GetCurrentRotate());
             };
 
             LeftButton.Released += async (s, e) =>
@@ -74,17 +111,18 @@ namespace AironControl
                 Debug.WriteLine("LEFT RELEASED");
                 _leftActive = false;
                 UpdateButtonColors();
-                await SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+                _ = SendDataBackgroundAsync(_currentX, _currentY, GetCurrentRotate());
             };
 
-            // ПРАВАЯ кнопка - включение при нажатии, выключение при отпускании
+            // РџР РђР’РђРЇ РєРЅРѕРїРєР° - РІРєР»СЋС‡РµРЅРёРµ РїСЂРё РЅР°Р¶Р°С‚РёРё, РІС‹РєР»СЋС‡РµРЅРёРµ РїСЂРё РѕС‚РїСѓСЃРєР°РЅРёРё
             RightButton.Pressed += async (s, e) =>
             {
                 Debug.WriteLine("RIGHT PRESSED");
+                _lastInputTime = DateTime.Now;
                 _rightActive = true;
-                _leftActive = false; // Выключаем левую кнопку
+                _leftActive = false; // Р’С‹РєР»СЋС‡Р°РµРј Р»РµРІСѓСЋ РєРЅРѕРїРєСѓ
                 UpdateButtonColors();
-                await SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+                _ = SendDataBackgroundAsync(_currentX, _currentY, GetCurrentRotate());
             };
 
             RightButton.Released += async (s, e) =>
@@ -92,16 +130,17 @@ namespace AironControl
                 Debug.WriteLine("RIGHT RELEASED");
                 _rightActive = false;
                 UpdateButtonColors();
-                await SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+                _ = SendDataBackgroundAsync(_currentX, _currentY, GetCurrentRotate());
             };
 
-            // STOP кнопка - сброс всего при нажатии, отпускании ничего не меняем
+            // STOP РєРЅРѕРїРєР° - СЃР±СЂРѕСЃ РІСЃРµРіРѕ РїСЂРё РЅР°Р¶Р°С‚РёРё, РѕС‚РїСѓСЃРєР°РЅРёРё РЅРёС‡РµРіРѕ РЅРµ РјРµРЅСЏРµРј
             StopButton.Pressed += async (s, e) =>
             {
                 Debug.WriteLine("STOP PRESSED");
-                StopButton.BackgroundColor = Colors.Red; // Визуальная обратная связь
+                _lastInputTime = DateTime.Now;
+                StopButton.BackgroundColor = Colors.Red; // Р’РёР·СѓР°Р»СЊРЅР°СЏ РѕР±СЂР°С‚РЅР°СЏ СЃРІСЏР·СЊ
 
-                // Немедленный сброс
+                // РќРµРјРµРґР»РµРЅРЅС‹Р№ СЃР±СЂРѕСЃ
                 _leftActive = false;
                 _rightActive = false;
                 UpdateButtonColors();
@@ -111,13 +150,13 @@ namespace AironControl
             StopButton.Released += (s, e) =>
             {
                 Debug.WriteLine("STOP RELEASED");
-                StopButton.BackgroundColor = Color.FromArgb("#E0E0E0"); // Возвращаем цвет
+                StopButton.BackgroundColor = Color.FromArgb("#E0E0E0"); // Р’РѕР·РІСЂР°С‰Р°РµРј С†РІРµС‚
             };
         }
-
+       
         private void UpdateButtonColors()
         {
-            // Обновляем цвета всех кнопок
+            // РћР±РЅРѕРІР»СЏРµРј С†РІРµС‚Р° РІСЃРµС… РєРЅРѕРїРѕРє
             LeftButton.BackgroundColor = _leftActive ? Colors.Blue : Color.FromArgb("#E0E0E0");
             RightButton.BackgroundColor = _rightActive ? Colors.Blue : Color.FromArgb("#E0E0E0");
         }
@@ -143,13 +182,13 @@ namespace AironControl
 
             if (_videoFrame != null)
             {
-                // Используем реальные пропорции кадра
+                // РСЃРїРѕР»СЊР·СѓРµРј СЂРµР°Р»СЊРЅС‹Рµ РїСЂРѕРїРѕСЂС†РёРё РєР°РґСЂР°
                 double frameAspect = (double)_videoFrame.Width / _videoFrame.Height;
                 UpdateVideoLayout(width, height, frameAspect);
             }
             else
             {
-                // Используем значение по умолчанию
+                // РСЃРїРѕР»СЊР·СѓРµРј Р·РЅР°С‡РµРЅРёРµ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ
                 UpdateVideoLayout(width, height, DEFAULT_ASPECT_RATIO);
             }
 
@@ -157,15 +196,15 @@ namespace AironControl
         }
         private void UpdateVideoLayout(double width, double height, double aspectRatio)
         {
-            // Рассчитываем размеры с сохранением пропорций
-            double containerWidth = width * 0.6; // 60% ширины экрана
-            double containerHeight = height * 0.8; // 80% высоты экрана
+            // Р Р°СЃСЃС‡РёС‚С‹РІР°РµРј СЂР°Р·РјРµСЂС‹ СЃ СЃРѕС…СЂР°РЅРµРЅРёРµРј РїСЂРѕРїРѕСЂС†РёР№
+            double containerWidth = width * 0.6; // 60% С€РёСЂРёРЅС‹ СЌРєСЂР°РЅР°
+            double containerHeight = height * 0.8; // 80% РІС‹СЃРѕС‚С‹ СЌРєСЂР°РЅР°
 
-            // Рассчитываем размер видео с сохранением пропорций
+            // Р Р°СЃСЃС‡РёС‚С‹РІР°РµРј СЂР°Р·РјРµСЂ РІРёРґРµРѕ СЃ СЃРѕС…СЂР°РЅРµРЅРёРµРј РїСЂРѕРїРѕСЂС†РёР№
             double videoWidth = containerWidth;
             double videoHeight = videoWidth / aspectRatio;
 
-            // Если видео выше контейнера, пересчитываем
+            // Р•СЃР»Рё РІРёРґРµРѕ РІС‹С€Рµ РєРѕРЅС‚РµР№РЅРµСЂР°, РїРµСЂРµСЃС‡РёС‚С‹РІР°РµРј
             if (videoHeight > containerHeight)
             {
                 videoHeight = containerHeight;
@@ -176,7 +215,6 @@ namespace AironControl
         protected override async void OnAppearing()
         {
             base.OnAppearing();
-
             _ = Task.Run(async () =>
             {
                 try
@@ -192,7 +230,13 @@ namespace AironControl
                 }
             });
             UpdateLayoutForScreenSize();
-        }
+            Dispatcher.StartTimer(TimeSpan.FromMilliseconds(80), () =>
+            {
+                HeartbeatTimer_Tick(null, EventArgs.Empty);
+
+                return true; 
+            });
+        }   
         private void OnMainGridSizeChanged(object sender, EventArgs e)
         {
             if (MainGrid.Width <= 0 || MainGrid.Height <= 0)
@@ -217,14 +261,14 @@ namespace AironControl
                 if (_screenWidth <= MIN_SCREEN_WIDTH || _screenHeight <= MIN_SCREEN_HEIGHT)
                     return;
 
-                // 1. Определяем базовый масштаб (нормализуем к ширине 375 - iPhone 8/SE)
+                // 1. РћРїСЂРµРґРµР»СЏРµРј Р±Р°Р·РѕРІС‹Р№ РјР°СЃС€С‚Р°Р± (РЅРѕСЂРјР°Р»РёР·СѓРµРј Рє С€РёСЂРёРЅРµ 375 - iPhone 8/SE)
                 var baseWidth = 375.0;
                 var scaleFactor = _screenWidth / baseWidth;
-
-                // Ограничиваем масштаб
+                
+                // РћРіСЂР°РЅРёС‡РёРІР°РµРј РјР°СЃС€С‚Р°Р±
                 scaleFactor = Math.Max(0.7, Math.Min(scaleFactor, 1.8));
 
-                // 2. Для ландшафтного режима используем другой подход
+                // 2. Р”Р»СЏ Р»Р°РЅРґС€Р°С„С‚РЅРѕРіРѕ СЂРµР¶РёРјР° РёСЃРїРѕР»СЊР·СѓРµРј РґСЂСѓРіРѕР№ РїРѕРґС…РѕРґ
                 if (_isLandscape)
                 {
                     scaleFactor = Math.Min(_screenHeight / 375.0, scaleFactor);
@@ -232,16 +276,16 @@ namespace AironControl
 
                 Debug.WriteLine($"Scale factor: {scaleFactor:F2}");
 
-                // 3. Обновляем размер джойстика (процент от меньшей стороны экрана)
+                // 3. РћР±РЅРѕРІР»СЏРµРј СЂР°Р·РјРµСЂ РґР¶РѕР№СЃС‚РёРєР° (РїСЂРѕС†РµРЅС‚ РѕС‚ РјРµРЅСЊС€РµР№ СЃС‚РѕСЂРѕРЅС‹ СЌРєСЂР°РЅР°)
                 var minSide = Math.Min(_screenWidth, _screenHeight);
-                var joystickSize = minSide * 0.25; // 25% от меньшей стороны
+                var joystickSize = minSide * 0.25; // 25% РѕС‚ РјРµРЅСЊС€РµР№ СЃС‚РѕСЂРѕРЅС‹
                 joystickSize = Math.Max(150, Math.Min(joystickSize, 300));
 
                 JoystickContainer.WidthRequest = joystickSize;
                 JoystickContainer.HeightRequest = joystickSize;
                 JoystickContainer.Margin = new Thickness(0, 0, _screenWidth * 0.05, 0);
 
-                // 4. Обновляем размер кнопок
+                // 4. РћР±РЅРѕРІР»СЏРµРј СЂР°Р·РјРµСЂ РєРЅРѕРїРѕРє
                 var buttonSize = 70 * scaleFactor;
                 buttonSize = Math.Max(50, Math.Min(buttonSize, 100));
 
@@ -257,17 +301,17 @@ namespace AironControl
                 RightButton.HeightRequest = buttonSize;
                 RightButton.CornerRadius = (int)(buttonSize / 2);
 
-                // 5. Обновляем расстояние между кнопками
+                // 5. РћР±РЅРѕРІР»СЏРµРј СЂР°СЃСЃС‚РѕСЏРЅРёРµ РјРµР¶РґСѓ РєРЅРѕРїРєР°РјРё
                 var buttonSpacing = 30 * scaleFactor;
                 buttonSpacing = Math.Max(20, Math.Min(buttonSpacing, 50));
                 ButtonsLayout.Spacing = buttonSpacing;
 
-                // 6. Обновляем высоту контейнера кнопок
+                // 6. РћР±РЅРѕРІР»СЏРµРј РІС‹СЃРѕС‚Сѓ РєРѕРЅС‚РµР№РЅРµСЂР° РєРЅРѕРїРѕРє
                 var buttonsContainerHeight = 100 * scaleFactor;
                 buttonsContainerHeight = Math.Max(80, Math.Min(buttonsContainerHeight, 150));
                 ButtonsContainer.HeightRequest = buttonsContainerHeight;
 
-                // 7. Обновляем отступы
+                // 7. РћР±РЅРѕРІР»СЏРµРј РѕС‚СЃС‚СѓРїС‹
                 var bottomPadding = 30 * scaleFactor;
                 bottomPadding = Math.Max(20, Math.Min(bottomPadding, 50));
                 var leftPadding = 15 * scaleFactor;
@@ -275,21 +319,21 @@ namespace AironControl
 
                 ButtonsContainer.Padding = new Thickness(leftPadding, 0, 0, bottomPadding);
 
-                // 8. Обновляем размер индикатора
+                // 8. РћР±РЅРѕРІР»СЏРµРј СЂР°Р·РјРµСЂ РёРЅРґРёРєР°С‚РѕСЂР°
                 var indicatorSize = 40 * scaleFactor;
                 indicatorSize = Math.Max(30, Math.Min(indicatorSize, 60));
                 StatusIndicator.WidthRequest = indicatorSize;
                 StatusIndicator.HeightRequest = indicatorSize;
 
-                // 9. Обновляем шрифты
+                // 9. РћР±РЅРѕРІР»СЏРµРј С€СЂРёС„С‚С‹
                 var baseFontSize = 16.0;
                 var fontSize = baseFontSize * scaleFactor;
                 fontSize = Math.Max(12, Math.Min(fontSize, 24));
 
                 CoordinatesLabel.FontSize = fontSize;
-                JoystickCoordinatesLabel.FontSize = fontSize * 0.875; // 14px при 16px основном
+                JoystickCoordinatesLabel.FontSize = fontSize * 0.875; // 14px РїСЂРё 16px РѕСЃРЅРѕРІРЅРѕРј
 
-                // 10. Обновляем отступы текста
+                // 10. РћР±РЅРѕРІР»СЏРµРј РѕС‚СЃС‚СѓРїС‹ С‚РµРєСЃС‚Р°
                 var textPaddingH = 16 * scaleFactor;
                 var textPaddingV = 10 * scaleFactor;
                 textPaddingH = Math.Max(12, Math.Min(textPaddingH, 24));
@@ -328,6 +372,7 @@ namespace AironControl
             base.OnDisappearing();
 
             MainGrid.SizeChanged -= OnMainGridSizeChanged;
+
         }
         private int GetCurrentRotate()
         {
@@ -345,10 +390,10 @@ namespace AironControl
                 {
                     try
                     {
-                        // Используем ReceiveAsync без блокировки
+                        // РСЃРїРѕР»СЊР·СѓРµРј ReceiveAsync Р±РµР· Р±Р»РѕРєРёСЂРѕРІРєРё
                         var result = await _udpClient.ReceiveAsync();
 
-                        // Обработка в отдельной задаче
+                        // РћР±СЂР°Р±РѕС‚РєР° РІ РѕС‚РґРµР»СЊРЅРѕР№ Р·Р°РґР°С‡Рµ
                         ThreadPool.QueueUserWorkItem(_ =>
                         {
                             try
@@ -358,12 +403,12 @@ namespace AironControl
 
                                 if (decoded != null)
                                 {
-                                    // Атомарная замена кадра
+                                    // РђС‚РѕРјР°СЂРЅР°СЏ Р·Р°РјРµРЅР° РєР°РґСЂР°
                                     var oldFrame = _videoFrame;
                                     _videoFrame = decoded;
                                     oldFrame?.Dispose();
 
-                                    // Ограничиваем частоту обновления (макс 25 FPS)
+                                    // РћРіСЂР°РЅРёС‡РёРІР°РµРј С‡Р°СЃС‚РѕС‚Сѓ РѕР±РЅРѕРІР»РµРЅРёСЏ (РјР°РєСЃ 25 FPS)
                                     MainThread.BeginInvokeOnMainThread(() =>
                                     {
                                         VideoView.InvalidateSurface();
@@ -372,14 +417,14 @@ namespace AironControl
                             }
                             catch
                             {
-                                // Игнорируем ошибки декодирования
+                                // РРіРЅРѕСЂРёСЂСѓРµРј РѕС€РёР±РєРё РґРµРєРѕРґРёСЂРѕРІР°РЅРёСЏ
                             }
                         });
                     }
                     catch (Exception ex)
                     {
                         Debug.WriteLine($"Video receive error: {ex.Message}");
-                        await Task.Delay(100); // Пауза при ошибках
+                        await Task.Delay(100); // РџР°СѓР·Р° РїСЂРё РѕС€РёР±РєР°С…
                     }
                 }
             }
@@ -401,7 +446,7 @@ namespace AironControl
             {
                 try
                 {
-                    // Быстрое масштабирование без сложных расчетов
+                    // Р‘С‹СЃС‚СЂРѕРµ РјР°СЃС€С‚Р°Р±РёСЂРѕРІР°РЅРёРµ Р±РµР· СЃР»РѕР¶РЅС‹С… СЂР°СЃС‡РµС‚РѕРІ
                     float scale = Math.Min(
                         e.Info.Width / (float)_videoFrame.Width,
                         e.Info.Height / (float)_videoFrame.Height
@@ -418,7 +463,7 @@ namespace AironControl
                 catch
                 {
                     canvas.DrawRect(0, 0, e.Info.Width, e.Info.Height, _videoPlaceholderPaint);
-                    canvas.DrawText("Ошибка видео",
+                    canvas.DrawText("РћС€РёР±РєР° РІРёРґРµРѕ",
                         e.Info.Width / 2,
                         e.Info.Height / 2,
                         _videoTextPaint);
@@ -427,7 +472,7 @@ namespace AironControl
             else
             {
                 canvas.DrawRect(0, 0, e.Info.Width, e.Info.Height, _videoPlaceholderPaint);
-                canvas.DrawText("Ожидание видео...",
+                canvas.DrawText("РћР¶РёРґР°РЅРёРµ РІРёРґРµРѕ...",
                     e.Info.Width / 2,
                     e.Info.Height / 2,
                     _videoTextPaint);
@@ -438,10 +483,10 @@ namespace AironControl
             JoystickGraphics.Drawable = new JoystickDrawable(
             () => _center,
             () => _knobPosition,
-            () => _isPressed);
+            () => _isActive);
         }
       
-        // Джойстик
+        // Р”Р¶РѕР№СЃС‚РёРє
         private void OnPanUpdated(object sender, PanUpdatedEventArgs e)
         {
             try
@@ -449,24 +494,26 @@ namespace AironControl
                 switch (e.StatusType)
                 {
                     case GestureStatus.Started:
-                        _isPressed = true;
-                        JoystickGraphics.Invalidate();
+                        _isActive = true;
+                        _lastInputTime = DateTime.Now;
                         break;
 
                     case GestureStatus.Running:
-                        UpdateKnobPositionAsync(e.TotalX, e.TotalY);
+                        _isActive = true;
+                        _lastInputTime = DateTime.Now;
+                        UpdateKnobPosition(e.TotalX, e.TotalY);
                         break;
 
                     case GestureStatus.Completed:
                     case GestureStatus.Canceled:
-                        ResetJoystickAsync();
+                        ResetToCenterImmediately();
                         break;
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"OnPanUpdated error: {ex.Message}");
-                _ = ResetJoystickAsync(); // Сброс при любой ошибке
+                ResetToCenterImmediately();
             }
         }
 
@@ -474,7 +521,7 @@ namespace AironControl
 
         private async Task ResetJoystickAsync()
         {
-            _isPressed = false;
+            _isActive = false;
             _knobPosition = _center;
             _currentX = 0;
             _currentY = 0;
@@ -484,60 +531,60 @@ namespace AironControl
             await SendDataBackgroundAsync(0, 0, 0);
         }
 
-        private void UpdateKnobPositionAsync(double totalX, double totalY)
+        private void UpdateKnobPosition(double totalX, double totalY)
         {
-            if (_center == PointF.Zero) return;
-
-            // Упростим вычисления
             float dx = (float)totalX;
             float dy = (float)totalY;
 
-            // Проверяем границы
             float distance = (float)Math.Sqrt(dx * dx + dy * dy);
-            float maxDistance = BaseRadius - KnobRadius;
+            float maxDist = BaseRadius - KnobRadius;
 
-            if (distance > maxDistance)
+            if (distance > maxDist)
             {
-                float scale = maxDistance / distance;
+                float scale = maxDist / distance;
                 dx *= scale;
                 dy *= scale;
             }
 
             _knobPosition = new PointF(_center.X + dx, _center.Y + dy);
 
-            // Вычисляем координаты
-            double newX = dx / maxDistance;
-            double newY = -dy / maxDistance; // Инвертируем Y
+            double newX = dx / maxDist;
+            double newY = -dy / maxDist;
 
-            if (Math.Abs(newX) < 0.1) newX = 0;
-            if (Math.Abs(newY) < 0.1) newY = 0;
+            if (Math.Abs(newX) < 0.13) newX = 0;   // deadzone в†‘
+            if (Math.Abs(newY) < 0.13) newY = 0;
 
-            bool significantChange = Math.Abs(newX - _currentX) > 0.1 ||
-                                    Math.Abs(newY - _currentY) > 0.1;
-
-            if (!significantChange) return;
 
             _currentX = newX;
             _currentY = newY;
 
             CoordinatesLabel.Text = $"X: {_currentX:F2}, Y: {_currentY:F2}";
-            JoystickGraphics.Invalidate();
+            JoystickCoordinatesLabel.Text = CoordinatesLabel.Text;
 
-            // Отправляем данные в фоне без ожидания
+            // Throttle Invalidate
+            if ((DateTime.Now - _lastInvalidate).TotalMilliseconds > INVALIDATE_THROTTLE_MS)
+            {
+                JoystickGraphics.Invalidate();
+                _lastInvalidate = DateTime.Now;
+            }
+
             _ = SendDataBackgroundAsync(_currentX, _currentY, GetCurrentRotate());
         }
 
         private async Task SendDataBackgroundAsync(double x, double y, int rotate)
         {
-            // Быстрая проверка без захвата семафора
-            if (Math.Abs(x - _lastSentData.x) < 0.1 &&
-                Math.Abs(y - _lastSentData.y) < 0.1 &&
+            // Р‘С‹СЃС‚СЂР°СЏ РїСЂРѕРІРµСЂРєР° Р±РµР· Р·Р°С…РІР°С‚Р° СЃРµРјР°С„РѕСЂР°
+            bool isZero = Math.Abs(x) < 0.01 && Math.Abs(y) < 0.01;
+
+            if (!isZero &&
+                Math.Abs(x - _lastSentData.x) < 0.08 &&
+                Math.Abs(y - _lastSentData.y) < 0.08 &&
                 rotate == _lastSentData.rotate)
             {
-                return;
+                return; // С‚РѕР»СЊРєРѕ РЅРµРЅСѓР»РµРІС‹Рµ Р·РЅР°С‡РµРЅРёСЏ РґРµРґСѓРїР»РёС†РёСЂСѓРµРј
             }
 
-            if (!await _sendSemaphore.WaitAsync(0)) // Не блокируем, если занят
+            if (! _sendSemaphore.Wait(0)) // РќРµ Р±Р»РѕРєРёСЂСѓРµРј, РµСЃР»Рё Р·Р°РЅСЏС‚
                 return;
 
             try
@@ -564,7 +611,7 @@ namespace AironControl
                 bool connected = await _connection.ConnectToDevice();
                 if (connected)
                 {
-                    await _connection.ChangeMode(22);
+                    await _connection.ChangeMode(0);
                     await _connection.ChangeMode(2);
                     await _connection.SendIP();
                 }
@@ -587,6 +634,10 @@ namespace AironControl
 
                 if (connected)
                 {
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        StatusIndicator.Source = "green_light.svg";
+                    });
                     var quickTasks = Task.WhenAll(
                         _connection.ChangeMode(22),
                         _connection.ChangeMode(2),
@@ -595,10 +646,6 @@ namespace AironControl
 
                     await Task.WhenAny(quickTasks, Task.Delay(2000));
 
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        StatusIndicator.Source = "green_light.svg";
-                    });
                 }
                 else
                 {
@@ -617,8 +664,21 @@ namespace AironControl
                 });
             }
         }
+        private async void ResetToCenterImmediately()
+        {
+            _isActive = false;
+            _currentX = _currentY = 0;
+            _knobPosition = _center;
 
-        // Левые кнопки
+            CoordinatesLabel.Text = "X: 0.00, Y: 0.00";
+            JoystickCoordinatesLabel.Text = CoordinatesLabel.Text;
+            JoystickGraphics.Invalidate();
+
+            Debug.WriteLine("[RESET] РџР°Р»РµС† РѕС‚РїСѓС‰РµРЅ в†’ РјРіРЅРѕРІРµРЅРЅС‹Р№ 0,0,0");
+            await SendDataBackgroundAsync(0, 0, GetCurrentRotate());
+        }
+
+        // Р›РµРІС‹Рµ РєРЅРѕРїРєРё
         private void OnLeftPointerPressed(object sender, PointerEventArgs e)
         {
             Debug.WriteLine("=== LEFT PRESSED ===");
@@ -637,19 +697,19 @@ namespace AironControl
 
         private void OnLeftPointerEntered(object sender, PointerEventArgs e)
         {
-            // Опционально: визуальный feedback при наведении
+            // РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: РІРёР·СѓР°Р»СЊРЅС‹Р№ feedback РїСЂРё РЅР°РІРµРґРµРЅРёРё
             if (!_leftActive)
                 LeftButton.BackgroundColor = Colors.LightBlue;
         }
 
         private void OnLeftPointerExited(object sender, PointerEventArgs e)
         {
-            // Возвращаем цвет если не активна
+            // Р’РѕР·РІСЂР°С‰Р°РµРј С†РІРµС‚ РµСЃР»Рё РЅРµ Р°РєС‚РёРІРЅР°
             if (!_leftActive)
                 LeftButton.BackgroundColor = Color.FromArgb("#E0E0E0");
         }
 
-        // Правые кнопки (аналогично)
+        // РџСЂР°РІС‹Рµ РєРЅРѕРїРєРё (Р°РЅР°Р»РѕРіРёС‡РЅРѕ)
         private void OnRightPointerPressed(object sender, PointerEventArgs e)
         {
             Debug.WriteLine("=== RIGHT PRESSED ===");
@@ -685,7 +745,7 @@ namespace AironControl
             _leftActive = false;
             _rightActive = false;
 
-            // Сброс цветов кнопок
+            // РЎР±СЂРѕСЃ С†РІРµС‚РѕРІ РєРЅРѕРїРѕРє
             LeftButton.BackgroundColor = Color.FromArgb("#E0E0E0");
             RightButton.BackgroundColor = Color.FromArgb("#E0E0E0");
 
@@ -732,20 +792,20 @@ namespace AironControl
                 var knobPosition = _getKnobPosition();
                 var isPressed = _getIsPressed();
 
-                // Используем локальные переменные, а не _page
+                // РСЃРїРѕР»СЊР·СѓРµРј Р»РѕРєР°Р»СЊРЅС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ, Р° РЅРµ _page
                 if (center == PointF.Zero)
                     center = new PointF(dirtyRect.Width / 2, dirtyRect.Height / 2);
 
                 if (knobPosition == PointF.Zero)
                     knobPosition = center;
 
-                // Основание
+                // РћСЃРЅРѕРІР°РЅРёРµ
                 canvas.FillColor = _baseColor;
-                canvas.FillCircle(center, BaseRadius); // Используем center, а не _page._center
+                canvas.FillCircle(center, BaseRadius); // РСЃРїРѕР»СЊР·СѓРµРј center, Р° РЅРµ _page._center
 
-                // Ручка
+                // Р СѓС‡РєР°
                 canvas.FillColor = isPressed ? _knobPressedColor : _knobColor;
-                canvas.FillCircle(knobPosition, KnobRadius); // Используем knobPosition, а не _page._knobPosition
+                canvas.FillCircle(knobPosition, KnobRadius); // РСЃРїРѕР»СЊР·СѓРµРј knobPosition, Р° РЅРµ _page._knobPosition
             }
         }
     }

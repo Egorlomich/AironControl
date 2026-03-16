@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net9.0-android</TargetFramework>
+		<TargetFramework>net10.0-android</TargetFramework>
 		<OutputType>Exe</OutputType>
 		<RootNamespace>AironControl</RootNamespace>
 		<UseMaui>true</UseMaui>
@@ -28,10 +28,10 @@
 		<!-- Используйте совместимые версии пакетов -->
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.5" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.0" />
-		<PackageReference Include="SSH.NET" Version="2024.1.0" />
+		<PackageReference Include="SSH.NET" Version="2025.1.0" />
 	</ItemGroup>
 
 </Project>
