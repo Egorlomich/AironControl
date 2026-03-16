@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
+             x:Class="AironControl.JoystickPageWithVideo"
+             NavigationPage.HasNavigationBar="False"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="Black">
+
+    <Grid x:Name="MainGrid">
+
+        <!-- Слой 1: Видео на весь экран -->
+        <skia:SKCanvasView x:Name="VideoView"
+                           PaintSurface="OnVideoPaint"
+                           BackgroundColor="Black"
+                           HorizontalOptions="Fill"
+                           VerticalOptions="Fill"
+                           Grid.Row="0" Grid.Column="0"/>
+
+        <!-- Слой 2: Джойстик (сохраняем оригинальную позицию) -->
+        <AbsoluteLayout Grid.Row="0" Grid.Column="0"
+                        x:Name="JoystickContainer"
+                        HorizontalOptions="End"
+                        VerticalOptions="Center"
+                        Margin="0,0,20,0"
+                        WidthRequest="250"
+                        HeightRequest="250">
+
+            <GraphicsView x:Name="JoystickGraphics"
+                          BackgroundColor="Transparent"
+                          Opacity="0.3"
+                          AbsoluteLayout.LayoutBounds="0.5,0.5,1,1"
+                          AbsoluteLayout.LayoutFlags="All">
+                <GraphicsView.GestureRecognizers>
+                    <PanGestureRecognizer PanUpdated="OnPanUpdated"/>
+                    <TapGestureRecognizer Tapped="OnTapped"/>
+                </GraphicsView.GestureRecognizers>
+            </GraphicsView>
+
+            <Label x:Name="JoystickCoordinatesLabel"
+                   Text="X: 0.00, Y: 0.00"
+                   FontSize="14"
+                   TextColor="White"
+                   BackgroundColor="#80000000"
+                   Padding="10,5"
+                   AbsoluteLayout.LayoutFlags="PositionProportional"
+                   AbsoluteLayout.LayoutBounds="0.5,0.9,1,1"/>
+        </AbsoluteLayout>
+
+        <!-- Слой 3: Панель управления -->
+        <Grid Grid.Row="0" Grid.Column="0"
+              RowDefinitions="*,Auto"
+              ColumnDefinitions="*,*">
+
+            <!-- Верхняя строка: индикаторы -->
+            <AbsoluteLayout Grid.Row="0" Grid.ColumnSpan="2">
+                <Label x:Name="CoordinatesLabel"
+                       Text="Координаты: 0.00, 0.00"
+                       FontSize="16"
+                       TextColor="White"
+                       BackgroundColor="#80000000"
+                       Padding="16,10"
+                       AbsoluteLayout.LayoutFlags="PositionProportional"
+                       AbsoluteLayout.LayoutBounds="0.05,0.05,1,1"/>
+
+                <ImageButton x:Name="StatusIndicator"
+                             Source="red_light.svg"
+                             WidthRequest="40"
+                             HeightRequest="40"
+                             BackgroundColor="Transparent"
+                             Clicked="OnStatusClicked"
+                             AbsoluteLayout.LayoutFlags="PositionProportional"
+                             AbsoluteLayout.LayoutBounds="0.95,0.05,40,40"/>
+            </AbsoluteLayout>
+
+            <!-- Нижняя строка: кнопки управления -->
+            <Grid Grid.Row="1" Grid.ColumnSpan="2"
+                  x:Name="ButtonsContainer"
+                  HeightRequest="100"
+                  BackgroundColor="Transparent"
+                  HorizontalOptions="Start"
+                  VerticalOptions="End"
+                  Opacity="0.3"
+                  Padding="15,0,0,30">
+
+                <HorizontalStackLayout x:Name="ButtonsLayout"
+                                       Spacing="30" 
+                                       HorizontalOptions="Center">
+                    <Button x:Name="LeftButton"
+                            BackgroundColor="#E0E0E0"
+                            CornerRadius="30"
+                            WidthRequest="70"
+                            HeightRequest="70"
+                            Padding="0"
+                            ImageSource="rotate_left.svg">
+                    </Button>
+
+                    <Button x:Name="StopButton"
+                            BackgroundColor="#E0E0E0"
+                            CornerRadius="30"
+                            WidthRequest="70"
+                            HeightRequest="70"
+                            Padding="0"
+                            ImageSource="stop_move.svg">
+                    </Button>
+
+                    <Button x:Name="RightButton"
+                            BackgroundColor="#E0E0E0"
+                            CornerRadius="30"
+                            WidthRequest="70"
+                            HeightRequest="70"
+                            Padding="0" 
+                            ImageSource="rotate_right.svg">
+                    </Button>
+                </HorizontalStackLayout>
+
+            </Grid>
+
+        </Grid>
+
+    </Grid>
+</ContentPage>
