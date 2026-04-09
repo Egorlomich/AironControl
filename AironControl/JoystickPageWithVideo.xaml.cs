@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Maui.Controls;
+using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Dispatching;
 using Microsoft.Maui.Graphics;
 using SkiaSharp;
@@ -59,13 +60,16 @@ namespace AironControl
         {
             InitializeComponent();
             SetupJoystick();
-            _connection = new SshConnection(); 
 
-            InitializePaints(); 
+            InitializePaints();
+
             _center = new PointF(125, 125);
 
             SetupButtonEvents();
+            InitializeModeList();
+            InitializeViewList();
             MainGrid.SizeChanged += OnMainGridSizeChanged;
+            _connection = new SshConnection();
 
         }
 
@@ -215,20 +219,9 @@ namespace AironControl
         protected override async void OnAppearing()
         {
             base.OnAppearing();
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var videoTask = StartReceivingVideo();
-                    var connectTask = ConnectAsync();
 
-                    await Task.WhenAny(videoTask, connectTask);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Background init error: {ex.Message}");
-                }
-            });
+            _ = Task.Run(() => StartReceivingVideo());
+            _ = Task.Run(() => ConnectAsync());
             UpdateLayoutForScreenSize();
             Dispatcher.StartTimer(TimeSpan.FromMilliseconds(80), () =>
             {
@@ -253,7 +246,6 @@ namespace AironControl
                 UpdateLayoutForScreenSize();
             }
         }
-
         private void UpdateLayoutForScreenSize()
         {
             try
@@ -437,6 +429,111 @@ namespace AironControl
                 _udpClient?.Close();
             }
         }
+        private Border _modeDropdown;
+        private Border _viewDropdown;
+
+        private void InitializeModeList()
+        {
+            var modeList = new VerticalStackLayout { Spacing = 0 };
+
+            for (int i = 0; i <= 8; i++)
+            {
+                int mode = i;
+                var btn = new Button
+                {
+                    Text = $"Mode {mode}",
+                    TextColor = Colors.White,
+                    BackgroundColor = Colors.Transparent,
+                    FontSize = 12,
+                    HeightRequest = 30,
+                    Padding = new Thickness(4, 0)
+                };
+                btn.Clicked += async (s, e) =>
+                {
+                    _modeDropdown.IsVisible = false;
+                    ModeButton.Text = $"{mode} ▼";
+                    await _connection.ChangeMode(mode);
+                };
+                modeList.Add(btn);
+            }
+
+            _modeDropdown = new Border
+            {
+                IsVisible = false,
+                StrokeThickness = 0.5,
+                Stroke = new SolidColorBrush(Color.FromArgb("#666666")),
+                BackgroundColor = Color.FromArgb("#EE000000"),
+                Margin = new Thickness(0, 2, 0, 0),
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(4) },
+                Content = modeList
+            };
+
+            ModeContainer.Add(_modeDropdown);
+        }
+
+        private void OnModeButtonClicked(object sender, EventArgs e)
+        {
+            _viewDropdown.IsVisible = false;
+            _modeDropdown.IsVisible = !_modeDropdown.IsVisible;
+        }
+
+        private void InitializeViewList()
+        {
+            var items = new[]
+            {
+                "Карта местности",
+                "Текущая обстановка",
+                "Видеопоток"
+            };
+
+            var list = new VerticalStackLayout { Spacing = 0 };
+
+            foreach (var item in items)
+            {
+                var label = item;
+                var btn = new Button
+                {
+                    Text = label,
+                    TextColor = Colors.White,
+                    BackgroundColor = Colors.Transparent,
+                    FontSize = 11,
+                    HeightRequest = 35,
+                    Padding = new Thickness(6, 0)
+                };
+                btn.Clicked += (s, e) =>
+                {
+                    _viewDropdown.IsVisible = false;
+                    ViewButton.Text = label.Length > 10 ? label[..10] + "… ▼" : label + " ▼";
+                    OnViewSelected(label);
+                };
+                list.Add(btn);
+            }
+
+            _viewDropdown = new Border
+            {
+                IsVisible = false,
+                StrokeThickness = 0.5,
+                Stroke = new SolidColorBrush(Color.FromArgb("#666666")),
+                BackgroundColor = Color.FromArgb("#EE000000"),
+                Margin = new Thickness(0, 2, 0, 0),
+                StrokeShape = new RoundRectangle { CornerRadius = new CornerRadius(4) },
+                Content = list
+            };
+
+            ViewContainer.Add(_viewDropdown);
+        }
+
+        private void OnViewButtonClicked(object sender, EventArgs e)
+        {
+            _modeDropdown.IsVisible = false;
+            _viewDropdown.IsVisible = !_viewDropdown.IsVisible;
+        }
+
+        private void OnViewSelected(string view)
+        {
+            Debug.WriteLine($"[View] Selected: {view}");
+            // TODO: переключить отображаемый слой
+        }
         private void OnVideoPaint(object sender, SkiaSharp.Views.Maui.SKPaintSurfaceEventArgs e)
         {
             var canvas = e.Surface.Canvas;
@@ -611,7 +708,6 @@ namespace AironControl
                 bool connected = await _connection.ConnectToDevice();
                 if (connected)
                 {
-                    await _connection.ChangeMode(0);
                     await _connection.ChangeMode(2);
                     await _connection.SendIP();
                 }

@@ -24,7 +24,7 @@ namespace AironControl
         private DateTime _lastSendTime = DateTime.MinValue;
         private (double x, double y, int rotate) _lastSentValues;
         private const int THROTTLE_MS = 60;           // ограничение кооманд в секкунду (примерно 16-17 команд в секунду)
-        private const int RECONNECT_DELAY_MS = 1500;
+        private const int RECONNECT_DELAY_MS = 5000;
 
 
         private readonly string _filePath;
@@ -42,7 +42,7 @@ namespace AironControl
             _activeConnectionPath = Path.Combine(_path, _activeFileName);
 
             _host = LoadActiveConnection();
-            _ = StartProcessingLoopAsync();
+            _ = Task.Delay(600).ContinueWith(_ => StartProcessingLoopAsync());
         }
         private async Task StartProcessingLoopAsync()
         {
@@ -56,6 +56,12 @@ namespace AironControl
                     if (!IsConnected)
                     {
                         await ReconnectAsync();
+                        if (!IsConnected)
+                        {
+                            _commandQueue.Clear(); // сбрасываем накопившуюся очередь
+                            await Task.Delay(RECONNECT_DELAY_MS, _cts.Token);
+                            continue;
+                        }
                     }
 
                     if (_commandQueue.TryDequeue(out var command))
@@ -92,7 +98,7 @@ namespace AironControl
 
                 _client = new SshClient(_host.host.Trim(), _host.port, _host.user.Trim(), _host.password.Trim())
                 {
-                    ConnectionInfo = { Timeout = TimeSpan.FromSeconds(12) }   // увеличил таймаут
+                    ConnectionInfo = { Timeout = TimeSpan.FromSeconds(4) }
                 };
 
                 Debug.WriteLine("[Reconnect] Вызываем ConnectAsync...");
@@ -145,12 +151,8 @@ namespace AironControl
             }
             if (_shell == null || !_shell.CanWrite)
             {
-                await ReconnectAsync(cancellationToken);
-                if (_shell == null || !_shell.CanWrite)
-                {
-                    Debug.WriteLine("[Send] Shell still not writable after reconnect → skipping command");
-                    return;
-                }
+                Debug.WriteLine("[Send] Shell not writable → skipping command");
+                return;
             }
 
             try

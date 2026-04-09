@@ -6,7 +6,15 @@
              NavigationPage.HasNavigationBar="False"
              Shell.NavBarIsVisible="False"
              BackgroundColor="Black">
-
+    <ContentPage.Resources>
+        <Style TargetType="Picker">
+            <Setter Property="BackgroundColor" Value="Transparent"/>
+            <Setter Property="TextColor" Value="White"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="HeightRequest" Value="30"/>
+            <Setter Property="WidthRequest" Value="60"/>
+        </Style>
+    </ContentPage.Resources>
     <Grid x:Name="MainGrid">
 
         <!-- Слой 1: Видео на весь экран -->
@@ -71,6 +79,52 @@
                              Clicked="OnStatusClicked"
                              AbsoluteLayout.LayoutFlags="PositionProportional"
                              AbsoluteLayout.LayoutBounds="0.95,0.05,40,40"/>
+                <!-- Mode selector dropdown -->
+                <VerticalStackLayout x:Name="ModeContainer"
+                                     AbsoluteLayout.LayoutFlags="PositionProportional"
+                                     AbsoluteLayout.LayoutBounds="0.4,0.0,110,150"
+                                     Spacing="0"
+                                     ZIndex="10">
+                    <Border StrokeThickness="0.5"
+                            Stroke="#666666"
+                            BackgroundColor="#CC000000"
+                            Padding="0">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="4"/>
+                        </Border.StrokeShape>
+                        <Button x:Name="ModeButton"
+                                Text="2 ▼"
+                                TextColor="White"
+                                FontSize="12"
+                                BackgroundColor="Transparent"
+                                Clicked="OnModeButtonClicked"
+                                HeightRequest="35"/>
+                    </Border>
+                </VerticalStackLayout>
+
+                <!-- View selector dropdown -->
+                <VerticalStackLayout x:Name="ViewContainer"
+                                     AbsoluteLayout.LayoutFlags="PositionProportional"
+                                     AbsoluteLayout.LayoutBounds="0.6,0.02,110,150"
+                                     Spacing="0"
+                                     ZIndex="10">
+                    <Border StrokeThickness="0.5"
+                            Stroke="#666666"
+                            BackgroundColor="#CC000000"
+                            Padding="0">
+                        <Border.StrokeShape>
+                            <RoundRectangle CornerRadius="4"/>
+                        </Border.StrokeShape>
+                        <Button x:Name="ViewButton"
+                                Text="Вид ▼"
+                                TextColor="White"
+                                FontSize="12"
+                                BackgroundColor="Transparent"
+                                Clicked="OnViewButtonClicked"
+                                HeightRequest="35"/>
+                    </Border>
+                </VerticalStackLayout>
+
             </AbsoluteLayout>
 
             <!-- Нижняя строка: кнопки управления -->
