@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>AironControl</name>
+    </assembly>
+    <members>
+        <member name="M:AironControl.Connection.RunLaunchFile(System.String,System.String,System.Threading.CancellationToken)">
+            <summary>
+            ////////////////////////////////////
+            </summary>
+            <returns></returns>
+            <returns></returns>
+        </member>
+        <member name="T:AironControl.Resource">
+            <summary>
+            Android Resource Designer class.
+            Exposes the Android Resource designer assembly into the project Namespace.
+            </summary>
+        </member>
+    </members>
+</doc>

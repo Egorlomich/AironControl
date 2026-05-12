@@ -1,4 +1,5 @@
-﻿namespace AironControl
+﻿using AironControl.View;
+namespace AironControl
 {
     public partial class App : Application
     {
