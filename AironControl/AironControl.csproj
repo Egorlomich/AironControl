@@ -2,7 +2,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net10.0-android</TargetFramework>
+		<TargetFrameworks>net10.0-android;net10.0-windows10.0.19041.0</TargetFrameworks>
+		
 		<OutputType>Exe</OutputType>
 		<RootNamespace>AironControl</RootNamespace>
 		<UseMaui>true</UseMaui>
@@ -15,7 +16,11 @@
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
 		<ApplicationVersion>1</ApplicationVersion>
 
-		<SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">21</SupportedOSPlatformVersion>
+		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.19041.0</SupportedOSPlatformVersion>
+
+		<!-- Для разработки на Windows (решает твою ошибку) -->
+		<WindowsPackageType>None</WindowsPackageType>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -25,28 +30,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!-- Используйте совместимые версии пакетов -->
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="Microsoft.Maui.Controls" Version="9.0.0" />
+		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.60" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.5" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="SkiaSharp.Views.Maui.Controls" Version="3.119.0" />
 		<PackageReference Include="SSH.NET" Version="2025.1.0" />
+		<PackageReference Include="System.Reactive" Version="6.0.0" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <MauiXaml Update="View\JoystickPageWithVideo.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="View\LaunchPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="View\MainPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	  <MauiXaml Update="View\SettingsPage.xaml">
-	    <Generator>MSBuild:Compile</Generator>
-	  </MauiXaml>
-	</ItemGroup>
 
 </Project>

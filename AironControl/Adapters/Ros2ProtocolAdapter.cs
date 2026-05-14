@@ -20,11 +20,12 @@ namespace AironControl.Adapters
 
         public Task DisconnectAsync(CancellationToken ct = default) => Task.CompletedTask;
         public Task SendCommandAsync(CommandRequest command, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<string> ExecuteCommandAsync(string command, CancellationToken ct = default) => Task.FromResult(string.Empty);
         public Task<bool> ChangeMode(int mode, CancellationToken ct = default) => Task.FromResult(true);
         public Task<bool> SendIP(CancellationToken token = default) => Task.FromResult(true);
         public Task ReconnectAsync(CancellationToken ct = default) => ConnectAsync(ct);
 
-        public IObservable<object> SubscribeTelemetry() => Observable.Empty<object>();
+// public IObservable<object> SubscribeTelemetry() => Observable.Empty<object>();
     }
 
     // Аналогично можно сделать TcpProtocolAdapter, MqttProtocolAdapter, SshProtocolAdapter, UdpProtocolAdapter

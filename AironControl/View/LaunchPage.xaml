@@ -5,126 +5,138 @@
              NavigationPage.HasNavigationBar="False"
              BackgroundColor="White">
 
-    <Grid RowDefinitions="Auto,*" Padding="0">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="0">
+
+        <!-- Кнопка Назад (только Windows) -->
+        <Button Text="← Назад"
+                Clicked="OnBackClicked"
+                IsVisible="{OnPlatform Windows=True, Default=False}"
+                BackgroundColor="White"
+                TextColor="#2196F3"
+                FontSize="15"
+                HorizontalOptions="Start"
+                HeightRequest="40"
+                Padding="12,0"
+                BorderWidth="0"/>
 
         <!-- Верхний таб переключения -->
-        <Grid BackgroundColor="#F5F5F5"
+        <Grid Grid.Row="1"
+              BackgroundColor="#F5F5F5"
               ColumnDefinitions="*,*,*"
               HeightRequest="50"
               Padding="0">
 
-            <Button x:Name="TabLaunch"
-                    Text="Запуск"
+            <Button Text="Запуск"
                     Grid.Column="0"
-                    BackgroundColor="White"
+                    BackgroundColor="{Binding TabLaunchColor}"
                     TextColor="Black"
-                    FontSize="16"/>
+                    FontSize="16"
+                    Command="{Binding ShowLaunchTabCommand}"/>
 
-            <Button x:Name="TabNodes"
-                    Text="Ноды"
+            <Button Text="Ноды"
                     Grid.Column="1"
-                    BackgroundColor="#F5F5F5"
+                    BackgroundColor="{Binding TabNodesColor}"
                     TextColor="Black"
-                    FontSize="16"/>
+                    FontSize="16"
+                    Command="{Binding ShowNodesTabCommand}"/>
 
-            <Button x:Name="TabSystem"
-                    Text="Система"
+            <Button Text="Система"
                     Grid.Column="2"
-                    BackgroundColor="#F5F5F5"
+                    BackgroundColor="{Binding TabSystemColor}"
                     TextColor="Black"
-                    FontSize="16"/>
+                    FontSize="16"
+                    Command="{Binding ShowSystemTabCommand}"/>
         </Grid>
 
         <!-- Основной контент -->
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
 
             <!-- ЗОНА 1 -->
-            <ScrollView x:Name="LaunchZone">
+            <ScrollView IsVisible="{Binding IsLaunchZoneVisible}">
 
                 <VerticalStackLayout Padding="16" Spacing="12">
 
                     <Label Text="Пакет" FontSize="16" TextColor="Black"/>
-                    <Picker x:Name="PackagePicker" Title="Выберите пакет"/>
+                    <Picker Title="Выберите пакет"
+                            ItemsSource="{Binding Packages}"
+                            SelectedItem="{Binding SelectedPackage, Mode=TwoWay}"/>
 
                     <Label Text="Launch файл" FontSize="16" TextColor="Black"/>
-                    <Picker x:Name="LaunchPicker" Title="Выберите launch файл"/>
+                    <Picker Title="Выберите launch файл"
+                            ItemsSource="{Binding LaunchFiles}"
+                            SelectedItem="{Binding SelectedLaunchFile, Mode=TwoWay}"/>
 
                     <HorizontalStackLayout Spacing="10">
-                        <Button x:Name="BtnRunLaunch" 
-                            Text="Запустить"
-                            HorizontalOptions="FillAndExpand"
-                            BackgroundColor="#4CAF50"
-                            TextColor="White"/>
-
+                        <Button Text="Запустить"
+                                HorizontalOptions="FillAndExpand"
+                                BackgroundColor="#4CAF50"
+                                TextColor="White"
+                                Command="{Binding RunLaunchCommand}"
+                                IsEnabled="{Binding IsBtnRunEnabled}"/>
 
                         <Button Text="Перезагрузка робота"
-                           x:Name="BtnRebootRobot"
-                           TextColor="White"
-                           CornerRadius="8"
-                           HeightRequest="45"
-                           Grid.Column="1"                            
-                           Grid.Row="1"/>
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="45"
+                                Command="{Binding RebootRobotCommand}"
+                                IsEnabled="{Binding IsBtnRebootEnabled}"/>
+
                         <Button Text="Остановить программу"
-                          x:Name="BtnDeleteNodes"
-                          TextColor="White"
-                          CornerRadius="8"
-                          HeightRequest="45"
-                          Grid.Column="1"                          
-                          Grid.Row="1"/>
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="45"
+                                Command="{Binding DeleteNodesCommand}"
+                                IsEnabled="{Binding IsBtnDeleteEnabled}"/>
                     </HorizontalStackLayout>
                 </VerticalStackLayout>
             </ScrollView>
 
             <!-- ЗОНА 2 -->
-            <ScrollView x:Name="NodesZone" IsVisible="False">
+            <ScrollView IsVisible="{Binding IsNodesZoneVisible}">
 
                 <VerticalStackLayout Padding="8" Spacing="10">
 
-                    <HorizontalStackLayout  Padding="0" Spacing="10">
-                        <!-- Выбор топик или нода -->
-                        <Picker x:Name="NodeTopickPicker" Title="Выберите параметр" />
-                        <!-- Выбор list/echo/info посмотр вместо кнопок-->
-                        <Picker x:Name="ViewPicker" Title="Выберите параметр" />
+                    <HorizontalStackLayout Padding="0" Spacing="10">
+                        <Picker Title="Выберите параметр"
+                                ItemsSource="{Binding NodeTopicItems}"
+                                SelectedItem="{Binding SelectedNodeTopicItem, Mode=TwoWay}"/>
+                        <Picker Title="Выберите объект для работы"
+                                ItemsSource="{Binding ViewItems}"
+                                SelectedItem="{Binding SelectedViewItem, Mode=TwoWay}"/>
                         <Button Text="Посмотреть"
-                             x:Name="BtnView"
-                             TextColor="White"
-                             CornerRadius="8"
-                             HeightRequest="45"/>
-                    </HorizontalStackLayout >
-                 
+                                TextColor="White"
+                                CornerRadius="8"
+                                HeightRequest="45"
+                                Command="{Binding ViewCommand}"
+                                IsEnabled="{Binding IsBtnViewEnabled}"/>
+                    </HorizontalStackLayout>
+
                     <!-- Поле логов -->
                     <Frame BackgroundColor="#EEEEEE"
-                       Padding="10"
-                       CornerRadius="8"
-                       BorderColor="#CCCCCC">
-
-                        <Label x:Name="NodesLog"
-                           FontSize="14"
-                           TextColor="Black"/>  
+                           Padding="10"
+                           CornerRadius="8"
+                           BorderColor="#CCCCCC">
+                        <Label Text="{Binding NodesLog}"
+                               FontSize="14"
+                               TextColor="Black"/>
                     </Frame>
 
                 </VerticalStackLayout>
-
             </ScrollView>
 
             <!-- ЗОНА 3 -->
-            <ScrollView x:Name="SystemZone" IsVisible="False">
+            <ScrollView IsVisible="{Binding IsSystemZoneVisible}">
 
                 <VerticalStackLayout Padding="16" Spacing="12">
-
-                    <!-- Поле логов -->
                     <Frame BackgroundColor="#EEEEEE"
-                        Padding="10"
-                        CornerRadius="8"
-                        BorderColor="#CCCCCC">
-
-                        <Label x:Name="InfoRobotLabel"
-                            FontSize="14"
-                            TextColor="Black"/>
+                           Padding="10"
+                           CornerRadius="8"
+                           BorderColor="#CCCCCC">
+                        <Label Text="{Binding SystemInfo}"
+                               FontSize="14"
+                               TextColor="Black"/>
                     </Frame>
-
                 </VerticalStackLayout>
-
             </ScrollView>
         </Grid>
 

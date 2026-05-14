@@ -1,4 +1,3 @@
-﻿using AironControl.View;
 namespace AironControl
 {
     public partial class App : Application
@@ -9,6 +8,5 @@ namespace AironControl
             UserAppTheme = AppTheme.Light;
             MainPage = new NavigationPage(new MainPage());
         }
-
     }
 }

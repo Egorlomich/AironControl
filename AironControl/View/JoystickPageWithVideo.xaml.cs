@@ -1,14 +1,8 @@
-﻿using Microsoft.Extensions.Logging;
-using Microsoft.Maui.Controls;
+﻿using AironControl.ViewModels;
 using Microsoft.Maui.Controls.Shapes;
-using Microsoft.Maui.Dispatching;
-using Microsoft.Maui.Graphics;
 using SkiaSharp;
-using SkiaSharp.Views.Maui.Controls.Hosting;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 
 namespace AironControl
 {
@@ -29,7 +23,7 @@ namespace AironControl
         private PointF _startKnobPosition;
         private const float BaseRadius = 100f;
         private const float KnobRadius = 40f;
-        private SshConnection _connection;
+        private JoystickVM _vm;
         private double _currentX = 0, _currentY = 0;
         private DateTime _lastSentTime = DateTime.MinValue;
         private bool _leftActive = false;
@@ -69,8 +63,8 @@ namespace AironControl
             InitializeModeList();
             InitializeViewList();
             MainGrid.SizeChanged += OnMainGridSizeChanged;
-            _connection = new SshConnection();
-
+            _vm = IPlatformApplication.Current!.Services.GetRequiredService<JoystickVM>();
+            BindingContext = _vm;
         }
 
         private async void HeartbeatTimer_Tick(object sender, EventArgs e)
@@ -220,8 +214,8 @@ namespace AironControl
         {
             base.OnAppearing();
 
-            _ = Task.Run(() => StartReceivingVideo());
-            _ = Task.Run(() => ConnectAsync());
+            _ = Task.Run(StartReceivingVideo);
+            _ = Task.Run(async () => await _vm.ConnectAsync());
             UpdateLayoutForScreenSize();
             Dispatcher.StartTimer(TimeSpan.FromMilliseconds(80), () =>
             {
@@ -452,7 +446,7 @@ namespace AironControl
                 {
                     _modeDropdown.IsVisible = false;
                     ModeButton.Text = $"{mode} ▼";
-                    await _connection.ChangeMode(mode);
+                    await _vm.ChangeModeAsync(mode);
                 };
                 modeList.Add(btn);
             }
@@ -687,7 +681,7 @@ namespace AironControl
             try
             {
                 _lastSentData = (x, y, rotate);
-                await _connection.GoJoystickValues(x, y, rotate);
+                _vm.SendJoystickValues(x, y, rotate);
                 Debug.WriteLine($"Sent: X={x:F2}, Y={y:F2}, R={rotate}");
             }
             catch (Exception ex)
@@ -702,64 +696,11 @@ namespace AironControl
         private async void OnStatusClicked(object sender, EventArgs e)
         {
             StatusIndicator.IsEnabled = false;
-
-            await Task.Run(async () =>
-            {
-                bool connected = await _connection.ConnectToDevice();
-                if (connected)
-                {
-                    await _connection.ChangeMode(2);
-                    await _connection.SendIP();
-                }
-
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    StatusIndicator.Source = connected ? "green_light.svg" : "red_light.svg";
-                    StatusIndicator.IsEnabled = true;
-                });
-            });
+            await _vm.ConnectAsync();
+            StatusIndicator.IsEnabled = true;
         }
-        private async Task ConnectAsync()
-        {
-            try
-            {
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-
-                var connected = await _connection.ConnectToDevice();
-
-                if (connected)
-                {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        StatusIndicator.Source = "green_light.svg";
-                    });
-                    var quickTasks = Task.WhenAll(
-                        _connection.ChangeMode(22),
-                        _connection.ChangeMode(2),
-                        _connection.SendIP()
-                    );
-
-                    await Task.WhenAny(quickTasks, Task.Delay(2000));
-
-                }
-                else
-                {
-                    MainThread.BeginInvokeOnMainThread(() =>
-                    {
-                        StatusIndicator.Source = "red_light.svg";
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"Connect error: {ex.Message}");
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    StatusIndicator.Source = "red_light.svg";
-                });
-            }
-        }
+        private async void OnBackClicked(object sender, EventArgs e) => await Navigation.PopAsync();
         private async void ResetToCenterImmediately()
         {
             _isActive = false;
@@ -780,7 +721,7 @@ namespace AironControl
             Debug.WriteLine("=== LEFT PRESSED ===");
             _leftActive = true;
             LeftButton.BackgroundColor = Colors.Blue;
-            _ = SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+            SendCommand(_currentX, _currentY, GetCurrentRotate());
         }
 
         private void OnLeftPointerReleased(object sender, PointerEventArgs e)
@@ -788,7 +729,7 @@ namespace AironControl
             Debug.WriteLine("=== LEFT RELEASED ===");
             _leftActive = false;
             LeftButton.BackgroundColor = Color.FromArgb("#E0E0E0");
-            _ = SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+            SendCommand(_currentX, _currentY, GetCurrentRotate());
         }
 
         private void OnLeftPointerEntered(object sender, PointerEventArgs e)
@@ -811,7 +752,7 @@ namespace AironControl
             Debug.WriteLine("=== RIGHT PRESSED ===");
             _rightActive = true;
             RightButton.BackgroundColor = Colors.Blue;
-            _ = SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+            SendCommand(_currentX, _currentY, GetCurrentRotate());
         }
 
         private void OnRightPointerReleased(object sender, PointerEventArgs e)
@@ -819,7 +760,7 @@ namespace AironControl
             Debug.WriteLine("=== RIGHT RELEASED ===");
             _rightActive = false;
             RightButton.BackgroundColor = Color.FromArgb("#E0E0E0");
-            _ = SendCommandAsync(_currentX, _currentY, GetCurrentRotate());
+            SendCommand(_currentX, _currentY, GetCurrentRotate());
         }
 
         private void OnRightPointerEntered(object sender, PointerEventArgs e)
@@ -848,13 +789,11 @@ namespace AironControl
             await ResetJoystickAsync();
         }
 
-        private async Task SendCommandAsync(double x, double y, int rotate)
+        private void SendCommand(double x, double y, int rotate)
         {
             try
             {
-                Debug.WriteLine($"Sending: X={x:F2}, Y={y:F2}, R={rotate}");
-                await _connection.GoJoystickValues(x, y, rotate);
-                Debug.WriteLine($"Sent successfully");
+                _vm.SendJoystickValues(x, y, rotate);
             }
             catch (Exception ex)
             {

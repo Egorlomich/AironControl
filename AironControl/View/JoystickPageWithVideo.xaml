@@ -62,6 +62,21 @@
 
             <!-- Верхняя строка: индикаторы -->
             <AbsoluteLayout Grid.Row="0" Grid.ColumnSpan="2">
+
+                <!-- Кнопка Назад (только Windows) -->
+                <Button Text="← Назад"
+                        Clicked="OnBackClicked"
+                        IsVisible="{OnPlatform Windows=True, Default=False}"
+                        BackgroundColor="#CC000000"
+                        TextColor="White"
+                        FontSize="13"
+                        HeightRequest="35"
+                        Padding="10,0"
+                        BorderWidth="0"
+                        CornerRadius="4"
+                        AbsoluteLayout.LayoutFlags="PositionProportional"
+                        AbsoluteLayout.LayoutBounds="0.02,0.05,100,35"/>
+
                 <Label x:Name="CoordinatesLabel"
                        Text="Координаты: 0.00, 0.00"
                        FontSize="16"

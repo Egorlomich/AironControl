@@ -1,88 +1,103 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:local="clr-namespace:AironControl"
              x:Class="AironControl.SettingsPage"
              NavigationPage.HasNavigationBar="False"
              BackgroundColor="White">
 
-    <Grid RowDefinitions="Auto,*" Padding="0">
+    <Grid RowDefinitions="Auto,Auto,*" Padding="0">
+
+        <!-- Кнопка Назад (только Windows) -->
+        <Button Text="← Назад"
+                Clicked="OnBackClicked"
+                IsVisible="{OnPlatform Windows=True, Default=False}"
+                BackgroundColor="White"
+                TextColor="#2196F3"
+                FontSize="15"
+                HorizontalOptions="Start"
+                HeightRequest="40"
+                Padding="12,0"
+                BorderWidth="0"/>
+
         <!-- Верхний таб переключения -->
-        <Grid BackgroundColor="#F5F5F5"
+        <Grid Grid.Row="1"
+              BackgroundColor="#F5F5F5"
               ColumnDefinitions="*,*"
               HeightRequest="50"
               Padding="0">
 
-            <Button x:Name="TabConnections"
-                    Text="Мои подключения"
+            <Button Text="Мои подключения"
                     Grid.Column="0"
-                    BackgroundColor="White"
+                    BackgroundColor="{Binding TabConnectionsColor}"
                     TextColor="Black"
-                    FontSize="16"/>
+                    FontSize="16"
+                    Command="{Binding ShowConnectionsTabCommand}"/>
 
-            <Button x:Name="TabEdit"
-                    Text="Создать/Редактировать"
+            <Button Text="Создать/Редактировать"
                     Grid.Column="1"
-                    BackgroundColor="#F5F5F5"
+                    BackgroundColor="{Binding TabEditColor}"
                     TextColor="Black"
-                    FontSize="16"/>
+                    FontSize="16"
+                    Command="{Binding ShowEditTabCommand}"/>
         </Grid>
 
         <!-- Вкладка Мои подключения -->
-        <ScrollView x:Name="ConnectionsZone" Grid.Row="1" >
+        <ScrollView Grid.Row="2" IsVisible="{Binding IsConnectionsZoneVisible}">
             <VerticalStackLayout Padding="10" Spacing="20">
                 <!-- Блок активного подключения -->
                 <Frame BorderColor="LightGray" CornerRadius="10" Padding="15">
                     <VerticalStackLayout Spacing="15">
-                        <Label Text="Текущее подключение" 
-                               FontSize="18" 
-                               FontAttributes="Bold" 
+                        <Label Text="Текущее подключение"
+                               FontSize="18"
+                               FontAttributes="Bold"
                                TextColor="Black"/>
 
-                        <Grid ColumnDefinitions="Auto,*" 
-                              RowDefinitions="Auto,Auto,Auto,Auto,Auto" 
-                              ColumnSpacing="10" 
+                        <Grid ColumnDefinitions="Auto,*"
+                              RowDefinitions="Auto,Auto,Auto,Auto,Auto"
+                              ColumnSpacing="10"
                               RowSpacing="10"
                               Padding="0,5">
 
-                            <Label Text="Пресет:" Grid.Row="0" Grid.Column="0" 
+                            <Label Text="Пресет:" Grid.Row="0" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Label x:Name="ActivePresetNameLabel" Grid.Row="0" Grid.Column="1"
-                                   Text="Не выбран" FontSize="14" FontAttributes="Bold"/>
+                            <Label Text="{Binding ActivePresetName}" Grid.Row="0" Grid.Column="1"
+                                   FontSize="14" FontAttributes="Bold"/>
 
-                            <Label Text="Хост:" Grid.Row="1" Grid.Column="0" 
+                            <Label Text="Хост:" Grid.Row="1" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Label x:Name="ActiveHostLabel" Grid.Row="1" Grid.Column="1"
-                                   Text="-" FontSize="14"/>
+                            <Label Text="{Binding ActiveHostDisplay}" Grid.Row="1" Grid.Column="1"
+                                   FontSize="14"/>
 
-                            <Label Text="Пользователь:" Grid.Row="2" Grid.Column="0" 
+                            <Label Text="Пользователь:" Grid.Row="2" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Label x:Name="ActiveUserLabel" Grid.Row="2" Grid.Column="1"
-                                   Text="-" FontSize="14"/>
+                            <Label Text="{Binding ActiveUserDisplay}" Grid.Row="2" Grid.Column="1"
+                                   FontSize="14"/>
 
-                            <Label Text="Порт:" Grid.Row="3" Grid.Column="0" 
+                            <Label Text="Порт:" Grid.Row="3" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Label x:Name="ActivePortLabel" Grid.Row="3" Grid.Column="1"
-                                   Text="-" FontSize="14"/>
+                            <Label Text="{Binding ActivePortDisplay}" Grid.Row="3" Grid.Column="1"
+                                   FontSize="14"/>
 
-                            <Label Text="Модель:" Grid.Row="4" Grid.Column="0" 
+                            <Label Text="Модель:" Grid.Row="4" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Label x:Name="ActiveModelLabel" Grid.Row="4" Grid.Column="1"
-                                   Text="-" FontSize="14"/>
+                            <Label Text="{Binding ActiveModelDisplay}" Grid.Row="4" Grid.Column="1"
+                                   FontSize="14"/>
                         </Grid>
 
                         <Grid ColumnDefinitions="*,*" ColumnSpacing="10" Margin="0,10,0,0">
-                            <Button x:Name="TestConnectionButton" 
+                            <Button Grid.Column="0"
                                     Text="Проверить подключение"
-                                    Clicked="OnTestConnection"
+                                    Command="{Binding TestConnectionCommand}"
+                                    IsEnabled="{Binding IsTestButtonEnabled}"
                                     BackgroundColor="#2196F3"
                                     TextColor="White"
                                     HeightRequest="45"
                                     CornerRadius="8"/>
 
-                            <Button x:Name="ConnectButton" 
-                                    Text="Подключиться"
-                                    Clicked="OnConnect"
+                            <Button Grid.Column="1"
+                                    Text="{Binding ConnectButtonText}"
+                                    Command="{Binding ConnectCommand}"
+                                    IsEnabled="{Binding IsConnectButtonEnabled}"
                                     BackgroundColor="#4CAF50"
                                     TextColor="White"
                                     HeightRequest="45"
@@ -94,117 +109,132 @@
                 <!-- Блок списка подключений -->
                 <Frame BorderColor="LightGray" CornerRadius="10" Padding="15">
                     <VerticalStackLayout Spacing="15">
-                        <Label Text="Сохраненные подключения" 
-               FontSize="18" 
-               FontAttributes="Bold" 
-               TextColor="Black"/>
+                        <Label Text="Сохраненные подключения"
+                               FontSize="18"
+                               FontAttributes="Bold"
+                               TextColor="Black"/>
 
-                        <CollectionView x:Name="PresetsCollectionView"
-               SelectionMode="None"
-               EmptyView="Нет сохраненных подключений">
+                        <CollectionView ItemsSource="{Binding Presets}"
+                                        SelectionMode="None"
+                                        EmptyView="Нет сохраненных подключений">
                             <CollectionView.ItemTemplate>
                                 <DataTemplate>
                                     <Frame Padding="10" Margin="5,5" BackgroundColor="#F8F8F8">
-                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" 
-                      RowDefinitions="Auto,Auto"
-                      ColumnSpacing="10">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto"
+                                              RowDefinitions="Auto,Auto"
+                                              ColumnSpacing="10">
 
-                                            <Label Text="{Binding settingsName}" 
-                           FontSize="16" 
-                           FontAttributes="Bold"
-                           Grid.Column="0" Grid.Row="0"/>
+                                            <Label Text="{Binding settingsName}"
+                                                   FontSize="16"
+                                                   FontAttributes="Bold"
+                                                   Grid.Column="0" Grid.Row="0"/>
 
-                                            <Label Text="{Binding host}" 
-                           FontSize="12" 
-                           TextColor="Gray"
-                           Grid.Column="0" Grid.Row="1"/>
+                                            <Label Text="{Binding host}"
+                                                   FontSize="12"
+                                                   TextColor="Gray"
+                                                   Grid.Column="0" Grid.Row="1"/>
 
-                                            <Button Text="Выбрать" 
-                            Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
-                            VerticalOptions="Center"
-                            Padding="10,5"
-                            BackgroundColor="#4CAF50"
-                            TextColor="White"
-                            CornerRadius="5"
-                            FontAttributes="Bold"
-                            Clicked="OnSelectPresetClicked"/>
+                                            <Button Text="Выбрать"
+                                                    Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                                                    VerticalOptions="Center"
+                                                    Padding="10,5"
+                                                    BackgroundColor="#4CAF50"
+                                                    TextColor="White"
+                                                    CornerRadius="5"
+                                                    FontAttributes="Bold"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectPresetCommand}"
+                                                    CommandParameter="{Binding .}"/>
 
-                                            <Button Text="Редактировать" 
-                            Grid.Column="2" Grid.Row="0" Grid.RowSpan="2"
-                            VerticalOptions="Center"
-                            Padding="10,5"
-                            BackgroundColor="#4CAF50"
-                            TextColor="White"
-                            CornerRadius="5"
-                            FontSize="14"
-                            FontAttributes="Bold"
-                            Clicked="OnEditPresetClicked"/>
+                                            <Button Text="Редактировать"
+                                                    Grid.Column="2" Grid.Row="0" Grid.RowSpan="2"
+                                                    VerticalOptions="Center"
+                                                    Padding="10,5"
+                                                    BackgroundColor="#2196F3"
+                                                    TextColor="White"
+                                                    CornerRadius="5"
+                                                    FontSize="14"
+                                                    FontAttributes="Bold"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.EditPresetCommand}"
+                                                    CommandParameter="{Binding .}"/>
 
-                                            <Button Text="Удалить" 
-                            Grid.Column="3" Grid.Row="0" Grid.RowSpan="2"
-                            VerticalOptions="Center"
-                            Padding="10,5"
-                            BackgroundColor="#4CAF50"
-                            TextColor="White"
-                            CornerRadius="5"
-                            FontSize="14"
-                            FontAttributes="Bold"
-                            Clicked="OnDeletePresetClicked"/>
+                                            <Button Text="Удалить"
+                                                    Grid.Column="3" Grid.Row="0" Grid.RowSpan="2"
+                                                    VerticalOptions="Center"
+                                                    Padding="10,5"
+                                                    BackgroundColor="#F44336"
+                                                    TextColor="White"
+                                                    CornerRadius="5"
+                                                    FontSize="14"
+                                                    FontAttributes="Bold"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.DeletePresetCommand}"
+                                                    CommandParameter="{Binding .}"/>
                                         </Grid>
                                     </Frame>
                                 </DataTemplate>
                             </CollectionView.ItemTemplate>
                         </CollectionView>
+
+                        <Button Text="+ Новое подключение"
+                                Command="{Binding NewPresetCommand}"
+                                BackgroundColor="#607D8B"
+                                TextColor="White"
+                                HeightRequest="45"
+                                CornerRadius="8"
+                                Margin="0,5,0,0"/>
                     </VerticalStackLayout>
                 </Frame>
             </VerticalStackLayout>
         </ScrollView>
 
         <!-- Вкладка Создать/Редактировать -->
-        <ScrollView x:Name="EditZone" Grid.Row="1" IsVisible="False">
+        <ScrollView Grid.Row="2" IsVisible="{Binding IsEditZoneVisible}">
             <VerticalStackLayout Padding="16" Spacing="20">
-                <!-- Блок создания/редактирования подключения -->
                 <Frame BorderColor="LightGray" CornerRadius="10" Padding="15">
                     <VerticalStackLayout Spacing="15">
-                        <Label x:Name="EditTitleLabel"
-                               Text="Создание нового подключения" 
-                               FontSize="18" 
-                               FontAttributes="Bold" 
+                        <Label Text="{Binding EditTitle}"
+                               FontSize="18"
+                               FontAttributes="Bold"
                                TextColor="Black"/>
 
-                        <Grid ColumnDefinitions="Auto,*" 
-                              RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" 
-                              ColumnSpacing="10" 
+                        <Grid ColumnDefinitions="Auto,*"
+                              RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                              ColumnSpacing="10"
                               RowSpacing="10">
 
-                            <Label Text="Имя:" Grid.Row="0" Grid.Column="0" 
+                            <Label Text="Имя:" Grid.Row="0" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Entry x:Name="PresetNameEntry" Grid.Row="0" Grid.Column="1" 
+                            <Entry Text="{Binding FormName, Mode=TwoWay}"
+                                   Grid.Row="0" Grid.Column="1"
                                    Placeholder="Введите название" FontSize="14"/>
 
-                            <Label Text="Хост:" Grid.Row="1" Grid.Column="0" 
+                            <Label Text="Хост:" Grid.Row="1" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Entry x:Name="HostEntry" Grid.Row="1" Grid.Column="1" 
+                            <Entry Text="{Binding FormHost, Mode=TwoWay}"
+                                   Grid.Row="1" Grid.Column="1"
                                    Placeholder="Введите host или IP адрес" FontSize="14"/>
 
-                            <Label Text="Пользователь:" Grid.Row="2" Grid.Column="0" 
+                            <Label Text="Пользователь:" Grid.Row="2" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Entry x:Name="UserEntry" Grid.Row="2" Grid.Column="1" 
+                            <Entry Text="{Binding FormUser, Mode=TwoWay}"
+                                   Grid.Row="2" Grid.Column="1"
                                    Placeholder="Введите имя пользователя" FontSize="14"/>
 
-                            <Label Text="Порт:" Grid.Row="3" Grid.Column="0" 
+                            <Label Text="Порт:" Grid.Row="3" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Entry x:Name="PortEntry" Grid.Row="3" Grid.Column="1" 
+                            <Entry Text="{Binding FormPort, Mode=TwoWay}"
+                                   Grid.Row="3" Grid.Column="1"
                                    Placeholder="22" FontSize="14" Keyboard="Numeric"/>
 
-                            <Label Text="Пароль:" Grid.Row="4" Grid.Column="0" 
+                            <Label Text="Пароль:" Grid.Row="4" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Entry x:Name="PasswordEntry" Grid.Row="4" Grid.Column="1" 
+                            <Entry Text="{Binding FormPassword, Mode=TwoWay}"
+                                   Grid.Row="4" Grid.Column="1"
                                    Placeholder="Введите пароль" IsPassword="True" FontSize="14"/>
 
-                            <Label Text="Модель:" Grid.Row="5" Grid.Column="0" 
+                            <Label Text="Модель:" Grid.Row="5" Grid.Column="0"
                                    VerticalOptions="Center" FontSize="14"/>
-                            <Picker x:Name="ModelPicker" Grid.Row="5" Grid.Column="1" FontSize="14">
+                            <Picker SelectedIndex="{Binding FormModelIndex, Mode=TwoWay}"
+                                    Grid.Row="5" Grid.Column="1" FontSize="14">
                                 <Picker.Items>
                                     <x:String>Raspberry Pi 4</x:String>
                                     <x:String>Jetson Nano</x:String>
@@ -213,28 +243,22 @@
                             </Picker>
                         </Grid>
 
-                        <!-- Блок кнопок внизу -->
-                        <Grid ColumnDefinitions="*,*,*" 
-                              ColumnSpacing="10" 
-                              Margin="0,20,0,0">
-
-                            <Button x:Name="SavePresetButton" 
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="10" Margin="0,20,0,0">
+                            <Button Grid.Column="1"
                                     Text="Сохранить"
-                                    Clicked="OnSavePreset"
+                                    Command="{Binding SavePresetCommand}"
                                     BackgroundColor="#4CAF50"
                                     TextColor="White"
                                     HeightRequest="45"
-                                    CornerRadius="8"
-                                    Grid.Column="1"/>
+                                    CornerRadius="8"/>
 
-                            <Button x:Name="CancelButton" 
+                            <Button Grid.Column="2"
                                     Text="Отмена"
-                                    Clicked="OnCancel"
+                                    Command="{Binding CancelCommand}"
                                     BackgroundColor="#9E9E9E"
                                     TextColor="White"
                                     HeightRequest="45"
-                                    CornerRadius="8"
-                                    Grid.Column="2"/>
+                                    CornerRadius="8"/>
                         </Grid>
                     </VerticalStackLayout>
                 </Frame>
